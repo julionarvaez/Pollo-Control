@@ -1708,12 +1708,12 @@
                     </div>
                     <div class="stat-card warning">
                         <div class="stat-label">Ganancia Total</div>
-                        <div class="stat-value">${formatCurrency(data.lotes.reduce((sum, l) => sum + l.ganancia, 0))}</div>
+                        <div class="stat-value">${formatCurrency(data.lotes.reduce((sum, l) => sum + parseFloat(l.ganancia || 0), 0))}</div>
                         <div class="stat-description">De lotes activos</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">FCR Promedio</div>
-                        <div class="stat-value">${formatNumber(data.lotes.reduce((sum, l) => sum + l.fcr, 0) / (data.lotes.length || 1))}</div>
+                        <div class="stat-value">${formatNumber(data.lotes.reduce((sum, l) => sum + parseFloat(l.fcr || 0), 0) / (data.lotes.length || 1))}</div>
                         <div class="stat-description">Conversión alimenticia</div>
                     </div>
                 `;

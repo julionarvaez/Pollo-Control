@@ -63,12 +63,12 @@ echo.
 echo [5/6] Instalando dependencias...
 echo    Esto puede tomar algunos minutos...
 echo.
-pip install -r requirements.txt --quiet
+pip install -r backend\requirements.txt --quiet
 if errorlevel 1 (
     echo ❌ Error al instalar dependencias
     echo.
     echo Intentando instalar manualmente...
-    pip install Flask Flask-CORS Flask-SQLAlchemy PyJWT Werkzeug python-dotenv
+    pip install Flask Flask-CORS Flask-SQLAlchemy PyJWT Werkzeug python-dotenv reportlab openpyxl pandas SQLAlchemy qrcode Pillow gunicorn psycopg2-binary
 )
 echo ✅ Dependencias instaladas
 
