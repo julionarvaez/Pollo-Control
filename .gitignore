@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# Virtual envs
+venv/
+.venv/
+
+# OS / Editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Flask/SQLAlchemy runtime
+backend/instance/
+instance/
+*.db
+*.sqlite3
+
+# App generated files
+uploads/
+exports/
+backups/
+data/
+
+# Reports
+*.pdf
+*.xlsx
+
+# Logs
+*.log

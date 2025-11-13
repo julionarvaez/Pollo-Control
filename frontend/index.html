@@ -1,0 +1,3044 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Pollos de Engorde</title>
+    <!-- Evita 404 de favicon cuando se sirve desde 127.0.0.1:5500/localhost:5500 -->
+    <link rel="icon" href="data:,">
+    <script>
+        // Desregistrar cualquier Service Worker previo que pueda estar interceptando fetch y rompiendo CORS
+        (function(){
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(regs => {
+                    regs.forEach(r => r.unregister());
+                }).catch(()=>{});
+            }
+        })();
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1e40af;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #1f2937;
+            --light: #f9fafb;
+            --border: #e5e7eb;
+            --text: #374151;
+            --text-light: #6b7280;
+        }
+
+        /* Tema oscuro: variables y overrides */
+        [data-theme="dark"] {
+            --light: #0f172a; /* fondo base */
+            --text: #e2e8f0;
+            --text-light: #94a3b8;
+            --border: #334155;
+            --dark: #e5e7eb; /* textos destacados */
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--light);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        [data-theme="dark"] .header { background: #0b1220; box-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .user-info {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        /* Container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+        }
+
+        [data-theme="dark"] .card { background: #0b1220; box-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-left: 4px solid var(--primary);
+        }
+
+        [data-theme="dark"] .stat-card { background: #0b1220; box-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+
+        .stat-card.success { border-left-color: var(--success); }
+        .stat-card.warning { border-left-color: var(--warning); }
+        .stat-card.danger { border-left-color: var(--danger); }
+
+        .stat-label {
+            color: var(--text-light);
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--dark);
+        }
+
+        .stat-description {
+            color: var(--text-light);
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.625rem 1.25rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-outline {
+            background: white;
+            color: var(--primary);
+            border: 1px solid var(--primary);
+        }
+
+        [data-theme="dark"] .btn-outline { background: transparent; }
+
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.75rem;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 0.25rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+            transform: translateY(-1px);
+        }
+
+        .btn-warning:hover {
+            background: #d97706;
+            transform: translateY(-1px);
+        }
+
+        /* Table */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: var(--light);
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+        }
+
+        td {
+            padding: 1rem 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        tr:hover { background: var(--light); }
+        [data-theme="dark"] th { background: #0b1220; color: var(--text-light); }
+        [data-theme="dark"] tr:hover { background: #0f172a; }
+
+        /* Badge */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Form */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-label {
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: var(--dark);
+            font-size: 0.875rem;
+        }
+
+        .form-input,
+        .form-select,
+        .form-textarea {
+            padding: 0.625rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.875rem;
+            transition: border-color 0.2s;
+        }
+
+        [data-theme="dark"] .form-input,
+        [data-theme="dark"] .form-select,
+        [data-theme="dark"] .form-textarea {
+            background: #0b1220;
+            color: var(--text);
+            border-color: var(--border);
+        }
+
+        .form-input:focus,
+        .form-select:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-help {
+            font-size: 0.75rem;
+            color: var(--text-light);
+            margin-top: 0.25rem;
+            display: block;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        [data-theme="dark"] .modal-content { background: #0b1220; box-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-light);
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+
+        .close-btn:hover { background: var(--light); }
+        [data-theme="dark"] .close-btn:hover { background: #0f172a; }
+
+        /* Login Page */
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        }
+
+        .login-card {
+            background: white;
+            padding: 3rem;
+            border-radius: 12px;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        [data-theme="dark"] .login-card { background: #0b1220; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.6); }
+
+        .login-title {
+            text-align: center;
+            font-size: 2rem;
+            margin-bottom: 2rem;
+            color: var(--dark);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .tab {
+            padding: 0.75rem 1.5rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            color: var(--text-light);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Chart Container */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 1rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+            }
+
+            .header h1 {
+                font-size: 1.25rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stat-value {
+                font-size: 1.5rem;
+            }
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-light);
+        }
+
+        .spinner {
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Alert */
+        .alert {
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .alert-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .alert-danger { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        [data-theme="dark"] .alert-success { background: rgba(16,185,129,0.15); color: #10b981; border-color: rgba(16,185,129,0.3); }
+        [data-theme="dark"] .alert-danger { background: rgba(239,68,68,0.15); color: #ef4444; border-color: rgba(239,68,68,0.3); }
+
+        /* Badges en oscuro */
+        [data-theme="dark"] .badge-success { background: rgba(16,185,129,0.15); color: #10b981; }
+        [data-theme="dark"] .badge-warning { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        [data-theme="dark"] .badge-danger { background: rgba(239,68,68,0.15); color: #ef4444; }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Page -->
+    <div id="loginPage" class="login-container">
+        <div class="login-card">
+            <h1 class="login-title">🐔 Control de Pollos</h1>
+            <div id="loginAlert"></div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label class="form-label">Usuario</label>
+                    <input type="text" id="loginUsername" class="form-input" required value="admin">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Contraseña</label>
+                    <input type="password" id="loginPassword" class="form-input" required value="admin123">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+                    Iniciar Sesión
+                </button>
+            </form>
+            <p style="text-align: center; margin-top: 1rem; color: var(--text-light); font-size: 0.875rem;">
+                Usuario por defecto: admin / admin123
+            </p>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="mainApp" class="hidden">
+        <!-- Header -->
+        <header class="header">
+            <h1>🐔 Control de Pollos de Engorde</h1>
+            <div class="user-info">
+                <button id="themeToggle" class="btn btn-outline btn-sm" onclick="toggleTheme()" title="Cambiar tema">🌙 Oscuro</button>
+                <span id="userName"></span>
+                <button class="btn btn-outline" onclick="logout()">Cerrar Sesión</button>
+            </div>
+        </header>
+
+        <div class="container">
+            <!-- Dashboard Stats -->
+            <div class="stats-grid" id="dashboardStats"></div>
+            <div id="alertasDashboard" style="margin-bottom:1.5rem;"></div>
+            <div id="configuracionCard" style="margin-bottom:1.5rem;"></div>
+
+            <!-- Main Content -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Lotes Activos</h2>
+                    <button class="btn btn-primary" onclick="openModal('nuevoLoteModal')">
+                        ➕ Nuevo Lote
+                    </button>
+                </div>
+                
+                <div class="table-container">
+                    <table id="lotesTable">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Galpón</th>
+                                <th>Días Transcurridos</th>
+                                <th>Días Restantes</th>
+                                <th>Fecha Sacrificio</th>
+                                <th>Aves</th>
+                                <th>Peso (g)</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lotesTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Nuevo Lote -->
+    <div id="nuevoLoteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Crear Nuevo Lote</h3>
+                <button class="close-btn" onclick="closeModal('nuevoLoteModal')">×</button>
+            </div>
+            <form id="nuevoLoteForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Nombre del Lote *</label>
+                        <input type="text" name="nombre" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Fecha de Inicio *</label>
+                        <input type="date" name="fecha_inicio" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Cantidad de Pollitos *</label>
+                        <input type="number" name="cantidad_inicial" class="form-input" required min="1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Peso Inicial (g) *</label>
+                        <input type="number" name="peso_inicial" class="form-input" value="40" required step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Días de Ciclo (hasta sacrificio) *</label>
+                        <input type="number" name="dias_ciclo" class="form-input" value="42" required min="20" max="80" 
+                               placeholder="Ej: 42 días" title="Número de días desde inicio hasta sacrificio">
+                        <small class="form-help">Típicamente 35-50 días para pollos de engorde</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Fecha Estimada de Sacrificio</label>
+                        <input type="text" id="fechaSacrificioPreview" class="form-input" readonly 
+                               style="background: #f3f4f6; color: #6b7280;" 
+                               placeholder="Se calculará automáticamente">
+                        <small class="form-help">Calculada automáticamente: Fecha inicio + días de ciclo</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Genética</label>
+                        <select name="genetica" class="form-select">
+                            <option value="">Seleccionar...</option>
+                            <option value="Cobb 500">Cobb 500</option>
+                            <option value="Ross 308">Ross 308</option>
+                            <option value="Hubbard">Hubbard</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Proveedor</label>
+                        <input type="text" name="proveedor" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Galpón</label>
+                        <input type="text" name="galpon" class="form-input">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('nuevoLoteModal')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Crear Lote
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: QR del Lote -->
+    <div id="qrLoteModal" class="modal">
+        <div class="modal-content" style="max-width:420px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="qrModalTitle">QR del Lote</h3>
+                <button class="close-btn" onclick="closeModal('qrLoteModal')">×</button>
+            </div>
+            <div class="card" style="text-align:center;">
+                <img id="qrLoteImg" alt="QR del lote" style="width:320px;height:320px;margin:0 auto;display:block;image-rendering: pixelated;"/>
+                <a id="qrDownloadLink" class="btn btn-primary" style="margin-top:1rem;" href="#" download>Descargar PNG</a>
+                <p class="form-help" style="margin-top:0.75rem;">Escanéalo para ver el reporte público del lote.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Editar Lote -->
+    <div id="editarLoteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Editar Lote</h3>
+                <button class="close-btn" onclick="closeModal('editarLoteModal')">×</button>
+            </div>
+            <form id="editarLoteForm">
+                <input type="hidden" id="editLoteId" name="id">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Nombre del Lote *</label>
+                        <input type="text" id="editNombre" name="nombre" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Fecha de Inicio *</label>
+                        <input type="date" id="editFechaInicio" name="fecha_inicio" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Cantidad Inicial de Aves *</label>
+                        <input type="number" id="editCantidadInicial" name="cantidad_inicial" class="form-input" min="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Peso Inicial (kg)</label>
+                        <input type="number" id="editPesoInicial" name="peso_inicial" class="form-input" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Días de Ciclo (hasta sacrificio) *</label>
+                        <input type="number" id="editDiasCiclo" name="dias_ciclo" class="form-input" required min="20" max="80">
+                        <small class="form-help">Días desde inicio hasta sacrificio</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Fecha Estimada de Sacrificio</label>
+                        <input type="text" id="editFechaSacrificioPreview" class="form-input" readonly 
+                               style="background: #f3f4f6; color: #6b7280;">
+                        <small class="form-help">Calculada automáticamente</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Genética</label>
+                        <select id="editGenetica" name="genetica" class="form-select">
+                            <option value="">Seleccionar...</option>
+                            <option value="Cobb 500">Cobb 500</option>
+                            <option value="Ross 308">Ross 308</option>
+                            <option value="Hubbard">Hubbard</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Proveedor</label>
+                        <input type="text" id="editProveedor" name="proveedor" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Galpón</label>
+                        <input type="text" id="editGalpon" name="galpon" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Estado</label>
+                        <select id="editEstado" name="estado" class="form-select">
+                            <option value="activo">Activo</option>
+                            <option value="finalizado">Finalizado</option>
+                            <option value="pausado">Pausado</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('editarLoteModal')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Actualizar Lote
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Ver Lote -->
+    <div id="verLoteModal" class="modal">
+        <div class="modal-content" style="max-width: 1200px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="loteModalTitle"></h3>
+                <button class="close-btn" onclick="closeModal('verLoteModal')">×</button>
+            </div>
+            
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('resumen')">📊 Resumen</button>
+                <button class="tab" onclick="switchTab('registros')">📝 Registros</button>
+                <button class="tab" onclick="switchTab('economia')">💰 Economía</button>
+                <button class="tab" onclick="switchTab('sanidad')">💊 Sanidad</button>
+            </div>
+
+            <!-- Tab: Resumen -->
+            <div id="resumenTab" class="tab-content active">
+                <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-bottom:0.75rem;align-items:center;flex-wrap:wrap;">
+                    <label style="font-size:0.75rem;color:var(--text-light);display:flex;align-items:center;gap:0.25rem;">
+                        Semana:
+                        <input type="week" id="exportWeekInput" style="padding:0.25rem 0.5rem;border:1px solid var(--border);border-radius:4px;font-size:0.75rem;">
+                    </label>
+                    <button class="btn btn-outline btn-sm" onclick="exportarLote('pdf')" title="Exportar semana seleccionada (PDF)">🧾 Exportar PDF</button>
+                    <button class="btn btn-outline btn-sm" onclick="exportarLote('xlsx')" title="Exportar semana seleccionada (Excel)">📑 Exportar Excel</button>
+                </div>
+                <div id="estadisticasLote" class="stats-grid"></div>
+                
+                <!-- Alertas del lote -->
+                <div style="margin: 1.5rem 0;">
+                    <h3 style="margin-bottom: 0.75rem; color: var(--text-primary);">⚠️ Alertas</h3>
+                    <div id="alertasLote"></div>
+                </div>
+                
+                <div class="chart-container" id="chartPeso"></div>
+            </div>
+
+            <!-- Tab: Registros -->
+            <div id="registrosTab" class="tab-content">
+                <button class="btn btn-success" onclick="openModal('nuevoRegistroModal')" style="margin-bottom: 1rem;">
+                    ➕ Nuevo Registro
+                </button>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Alimento (kg)</th>
+                                <th>Agua (L)</th>
+                                <th>Mortalidad</th>
+                                <th>Peso (g)</th>
+                                <th>Temp (°C)</th>
+                                <th>Humedad (%)</th>
+                                <th>Observaciones</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="registrosTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab: Economía -->
+            <div id="economiaTab" class="tab-content">
+                <h3 style="margin-bottom: 1rem;">Costos</h3>
+                <button class="btn btn-success" onclick="openModal('nuevoCostoModal')" style="margin-bottom: 1rem;">
+                    ➕ Nuevo Costo
+                </button>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Categoría</th>
+                                <th>Concepto</th>
+                                <th>Monto</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="costosTableBody"></tbody>
+                    </table>
+                </div>
+
+                <h3 style="margin-top: 2rem; margin-bottom: 1rem;">Ingresos / Ventas</h3>
+                <button class="btn btn-primary" onclick="openModal('nuevoIngresoModal')" style="margin-bottom: 1rem;">
+                    ➕ Nuevo Ingreso
+                </button>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Cantidad</th>
+                                <th>Peso Prom (kg)</th>
+                                <th>Precio/kg</th>
+                                <th>Total</th>
+                                <th>Cliente</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ingresosTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab: Sanidad -->
+            <div id="sanidadTab" class="tab-content">
+                <button class="btn btn-success" onclick="openModal('nuevoSanidadModal')" style="margin-bottom: 1rem;">
+                    ➕ Nuevo Registro Sanitario
+                </button>
+                <button class="btn btn-outline" onclick="openModal('nuevoEnfermedadModal')" style="margin-bottom: 1rem; margin-left:0.5rem;">
+                    ➕ Nueva Enfermedad
+                </button>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Tipo</th>
+                                <th>Producto</th>
+                                <th>Dosis</th>
+                                <th>Edad (días)</th>
+                                <th>Enfermedad</th>
+                                <th>Vía</th>
+                                <th>Retiro (días)</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sanidadTableBody"></tbody>
+                    </table>
+                </div>
+                <div class="card" style="margin-top:1.5rem;">
+                    <div class="card-header">
+                        <h3 class="card-title">Enfermedades Registradas</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th>Síntomas</th>
+                                        <th>Prevención</th>
+                                        <th>Tratamiento</th>
+                                        <th>Medicamentos</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="enfermedadesTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Nuevo Registro -->
+    <div id="nuevoRegistroModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Nuevo Registro Diario</h3>
+                <button class="close-btn" onclick="closeModal('nuevoRegistroModal')">×</button>
+            </div>
+            <form id="nuevoRegistroForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Fecha *</label>
+                        <input type="date" name="fecha" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Alimento (kg)</label>
+                        <input type="number" name="alimento_kg" class="form-input" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Agua (litros)</label>
+                        <input type="number" name="agua_litros" class="form-input" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Mortalidad</label>
+                        <input type="number" name="mortalidad" class="form-input" value="0" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Peso Promedio (g)</label>
+                        <input type="number" name="peso_promedio" class="form-input" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Temperatura (°C)</label>
+                        <input type="number" name="temperatura_promedio" class="form-input" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Humedad (%)</label>
+                        <input type="number" name="humedad" class="form-input" step="0.1" min="0" max="100" placeholder="Ej: 65">
+                        <small class="form-help">Rango ideal usual: 50% - 70%</small>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Observaciones</label>
+                    <textarea name="observaciones" class="form-textarea"></textarea>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('nuevoRegistroModal')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Guardar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Nuevo Costo -->
+    <div id="nuevoCostoModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Registrar Costo</h3>
+                <button class="close-btn" onclick="closeModal('nuevoCostoModal')">×</button>
+            </div>
+            <form id="nuevoCostoForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Fecha *</label>
+                        <input type="date" name="fecha" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Categoría *</label>
+                        <select name="categoria" class="form-select" required>
+                            <option value="">Seleccionar...</option>
+                            <option value="Pollitos">Pollitos</option>
+                            <option value="Alimento">Alimento</option>
+                            <option value="Medicamentos">Medicamentos</option>
+                            <option value="Energía">Energía</option>
+                            <option value="Transporte">Transporte</option>
+                            <option value="Mano de Obra">Mano de Obra</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Concepto *</label>
+                        <input type="text" name="concepto" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Monto *</label>
+                        <input type="number" name="monto" class="form-input" required step="0.01">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Observaciones</label>
+                    <textarea name="observaciones" class="form-textarea"></textarea>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('nuevoCostoModal')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Guardar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Nuevo Ingreso -->
+    <div id="nuevoIngresoModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Registrar Ingreso / Venta</h3>
+                <button class="close-btn" onclick="closeModal('nuevoIngresoModal')">×</button>
+            </div>
+            <form id="nuevoIngresoForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Fecha *</label>
+                        <input type="date" name="fecha" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Cantidad Vendida *</label>
+                        <input type="number" name="cantidad_vendida" class="form-input" required min="1">
+                        <small class="form-help">Número de pollos vendidos</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Peso Promedio (kg) *</label>
+                        <input type="number" name="peso_promedio" class="form-input" required step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Precio por Kg *</label>
+                        <input type="number" name="precio_por_kg" class="form-input" required step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Cliente</label>
+                        <input type="text" name="cliente" class="form-input">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Observaciones</label>
+                    <textarea name="observaciones" class="form-textarea"></textarea>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('nuevoIngresoModal')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Guardar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Editar Ingreso -->
+    <div id="editarIngresoModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Editar Ingreso / Venta</h3>
+                <button class="close-btn" onclick="closeModal('editarIngresoModal')">×</button>
+            </div>
+            <form id="editarIngresoForm">
+                <input type="hidden" id="editIngresoId">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Fecha *</label>
+                        <input type="date" id="editIngresoFecha" name="fecha" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Cantidad Vendida *</label>
+                        <input type="number" id="editIngresoCantidad" name="cantidad_vendida" class="form-input" required min="1">
+                        <small class="form-help">Número de pollos vendidos</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Peso Promedio (kg) *</label>
+                        <input type="number" id="editIngresoPeso" name="peso_promedio" class="form-input" required step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Precio por Kg *</label>
+                        <input type="number" id="editIngresoPrecio" name="precio_por_kg" class="form-input" required step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Cliente</label>
+                        <input type="text" id="editIngresoCliente" name="cliente" class="form-input">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Observaciones</label>
+                    <textarea id="editIngresoObservaciones" name="observaciones" class="form-textarea"></textarea>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('editarIngresoModal')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Actualizar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Nuevo Registro Sanitario -->
+    <div id="nuevoSanidadModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Nuevo Registro Sanitario</h3>
+                <button class="close-btn" onclick="closeModal('nuevoSanidadModal')">×</button>
+            </div>
+            <form id="nuevoSanidadForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Fecha *</label>
+                        <input type="date" name="fecha" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Tipo *</label>
+                        <select name="tipo" class="form-select" required>
+                            <option value="">Seleccionar...</option>
+                            <option value="Vacuna">Vacuna</option>
+                            <option value="Antibiótico">Antibiótico</option>
+                            <option value="Vitaminas">Vitaminas</option>
+                            <option value="Desparasitante">Desparasitante</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Producto *</label>
+                        <input type="text" name="producto" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Dosis</label>
+                        <input type="text" name="dosis" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Edad (días)</label>
+                        <input type="number" name="edad_dias" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Enfermedad</label>
+                        <select name="enfermedad_id" id="sanidadEnfermedadSelect" class="form-select">
+                            <option value="">Seleccionar...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Vía de administración</label>
+                        <select name="via_administracion" class="form-select">
+                            <option value="">Seleccionar...</option>
+                            <option value="Oral">Oral</option>
+                            <option value="Agua">Agua</option>
+                            <option value="Inyectable">Inyectable</option>
+                            <option value="Spray">Spray</option>
+                            <option value="Alimento">Alimento</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Días de retiro</label>
+                        <input type="number" name="retiro_dias" class="form-input" min="0" placeholder="Ej: 7">
+                        <small class="form-help">Tiempo recomendado antes de sacrificio</small>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Observaciones</label>
+                    <textarea name="observaciones" class="form-textarea"></textarea>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('nuevoSanidadModal')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Guardar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Nueva Enfermedad -->
+    <div id="nuevoEnfermedadModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Registrar Enfermedad</h3>
+                <button class="close-btn" onclick="closeModal('nuevoEnfermedadModal')">×</button>
+            </div>
+            <form id="nuevaEnfermedadForm">
+                <div class="form-group">
+                    <label class="form-label">Nombre *</label>
+                    <input type="text" name="nombre" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Síntomas</label>
+                    <textarea name="sintomas" class="form-textarea" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Prevención</label>
+                    <textarea name="prevencion" class="form-textarea" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tratamiento</label>
+                    <textarea name="tratamiento" class="form-textarea" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Medicamentos</label>
+                    <textarea name="medicamentos" class="form-textarea" rows="2" placeholder="Separar por comas"></textarea>
+                </div>
+                <div style="display:flex; gap:1rem; justify-content:flex-end; margin-top:1rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('nuevoEnfermedadModal')">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Editar Enfermedad -->
+    <div id="editarEnfermedadModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Editar Enfermedad</h3>
+                <button class="close-btn" onclick="closeModal('editarEnfermedadModal')">×</button>
+            </div>
+            <form id="editarEnfermedadForm">
+                <input type="hidden" name="id" id="editarEnfermedadId">
+                <div class="form-group">
+                    <label class="form-label">Nombre *</label>
+                    <input type="text" name="nombre" id="editarEnfermedadNombre" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Síntomas</label>
+                    <textarea name="sintomas" id="editarEnfermedadSintomas" class="form-textarea" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Prevención</label>
+                    <textarea name="prevencion" id="editarEnfermedadPrevencion" class="form-textarea" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tratamiento</label>
+                    <textarea name="tratamiento" id="editarEnfermedadTratamiento" class="form-textarea" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Medicamentos</label>
+                    <textarea name="medicamentos" id="editarEnfermedadMedicamentos" class="form-textarea" rows="2"></textarea>
+                </div>
+                <div style="display:flex; gap:1rem; justify-content:flex-end; margin-top:1rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('editarEnfermedadModal')">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Actualizar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Editar Registro -->
+    <div id="editarRegistroModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Editar Registro Diario</h3>
+                <button class="close-btn" onclick="closeModal('editarRegistroModal')">×</button>
+            </div>
+            <form id="editarRegistroForm">
+                <input type="hidden" id="editRegistroId">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Fecha *</label>
+                        <input type="date" id="editRegistroFecha" name="fecha" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Alimento (kg)</label>
+                        <input type="number" id="editRegistroAlimento" name="alimento_kg" class="form-input" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Agua (litros)</label>
+                        <input type="number" id="editRegistroAgua" name="agua_litros" class="form-input" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Mortalidad</label>
+                        <input type="number" id="editRegistroMortalidad" name="mortalidad" class="form-input" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Peso Promedio (g)</label>
+                        <input type="number" id="editRegistroPeso" name="peso_promedio" class="form-input" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Temperatura (°C)</label>
+                        <input type="number" id="editRegistroTemperatura" name="temperatura_promedio" class="form-input" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Humedad (%)</label>
+                        <input type="number" id="editRegistroHumedad" name="humedad" class="form-input" step="0.1" min="0" max="100">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Observaciones</label>
+                    <textarea id="editRegistroObservaciones" name="observaciones" class="form-textarea"></textarea>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('editarRegistroModal')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Actualizar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Editar Costo -->
+    <div id="editarCostoModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Editar Costo</h3>
+                <button class="close-btn" onclick="closeModal('editarCostoModal')">×</button>
+            </div>
+            <form id="editarCostoForm">
+                <input type="hidden" id="editCostoId">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Fecha *</label>
+                        <input type="date" id="editCostoFecha" name="fecha" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Categoría *</label>
+                        <select id="editCostoCategoria" name="categoria" class="form-select" required>
+                            <option value="">Seleccionar...</option>
+                            <option value="Pollitos">Pollitos</option>
+                            <option value="Alimento">Alimento</option>
+                            <option value="Medicamentos">Medicamentos</option>
+                            <option value="Energía">Energía</option>
+                            <option value="Transporte">Transporte</option>
+                            <option value="Mano de Obra">Mano de Obra</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Concepto *</label>
+                        <input type="text" id="editCostoConcepto" name="concepto" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Monto *</label>
+                        <input type="number" id="editCostoMonto" name="monto" class="form-input" required step="0.01">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Observaciones</label>
+                    <textarea id="editCostoObservaciones" name="observaciones" class="form-textarea"></textarea>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('editarCostoModal')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Actualizar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Editar Sanidad -->
+    <div id="editarSanidadModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Editar Registro Sanitario</h3>
+                <button class="close-btn" onclick="closeModal('editarSanidadModal')">×</button>
+            </div>
+            <form id="editarSanidadForm">
+                <input type="hidden" id="editSanidadId">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Fecha *</label>
+                        <input type="date" id="editSanidadFecha" name="fecha" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Tipo *</label>
+                        <select id="editSanidadTipo" name="tipo" class="form-select" required>
+                            <option value="">Seleccionar...</option>
+                            <option value="Vacuna">Vacuna</option>
+                            <option value="Antibiótico">Antibiótico</option>
+                            <option value="Vitaminas">Vitaminas</option>
+                            <option value="Desparasitante">Desparasitante</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Producto *</label>
+                        <input type="text" id="editSanidadProducto" name="producto" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Dosis</label>
+                        <input type="text" id="editSanidadDosis" name="dosis" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Edad (días)</label>
+                        <input type="number" id="editSanidadEdad" name="edad_dias" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Enfermedad</label>
+                        <select id="editSanidadEnfermedad" name="enfermedad_id" class="form-select">
+                            <option value="">Seleccionar...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Vía de administración</label>
+                        <select id="editSanidadVia" name="via_administracion" class="form-select">
+                            <option value="">Seleccionar...</option>
+                            <option value="Oral">Oral</option>
+                            <option value="Agua">Agua</option>
+                            <option value="Inyectable">Inyectable</option>
+                            <option value="Spray">Spray</option>
+                            <option value="Alimento">Alimento</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Días de retiro</label>
+                        <input type="number" id="editSanidadRetiro" name="retiro_dias" class="form-input" min="0" placeholder="Ej: 7">
+                        <small class="form-help">Tiempo recomendado antes de sacrificio</small>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Observaciones</label>
+                    <textarea id="editSanidadObservaciones" name="observaciones" class="form-textarea"></textarea>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('editarSanidadModal')">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        Actualizar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Editar Configuración -->
+    <div id="editarConfigModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Editar Configuración de Umbrales</h3>
+                <button class="close-btn" onclick="closeModal('editarConfigModal')">×</button>
+            </div>
+            <form id="editarConfigForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Temp Min (°C)</label>
+                        <input type="number" step="0.1" name="temp_min" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Temp Max (°C)</label>
+                        <input type="number" step="0.1" name="temp_max" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Humedad Min (%)</label>
+                        <input type="number" step="0.1" name="humedad_min" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Humedad Max (%)</label>
+                        <input type="number" step="0.1" name="humedad_max" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Consumo mín (g/ave/día)</label>
+                        <input type="number" step="0.1" name="consumo_min_g_dia" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Mortalidad diaria máx (%)</label>
+                        <input type="number" step="0.1" name="mortalidad_diaria_max_pct" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Tolerancia curva peso (± %)</label>
+                        <input type="number" step="0.1" name="peso_tolerancia_pct" class="form-input" placeholder="5">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('editarConfigModal')">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="chart.min.js"></script>
+    <script>
+        // CONFIGURATION
+        // Base de API según el origen actual (sirviendo frontend y backend juntos)
+        function computeApiBase() {
+            const origin = window.location.origin || 'http://127.0.0.1:5000';
+            return `${origin}/api`;
+        }
+        const API_URL = computeApiBase();
+        try { console.debug('[API_URL]', API_URL); } catch {}
+        let currentToken = localStorage.getItem('token');
+    let currentLoteId = null;
+    let currentLoteGenetica = '';
+
+        // THEME
+        function applyTheme(theme) {
+            const t = theme === 'dark' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', t);
+            try { localStorage.setItem('theme', t); } catch {}
+            const btn = document.getElementById('themeToggle');
+            if (btn) {
+                btn.textContent = t === 'dark' ? '☀️ Claro' : '🌙 Oscuro';
+            }
+        }
+
+        function toggleTheme() {
+            const current = (localStorage.getItem('theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+            applyTheme(current === 'dark' ? 'light' : 'dark');
+        }
+
+        // UTILITIES
+        function showAlert(message, type = 'success') {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            
+            const container = document.querySelector('.container') || document.body;
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            setTimeout(() => alertDiv.remove(), 3000);
+        }
+
+        function formatNumber(num, decimals = 2) {
+            return Number(num).toFixed(decimals);
+        }
+
+        function formatCurrency(num) {
+            return new Intl.NumberFormat('es-CO', {
+                style: 'currency',
+                currency: 'COP',
+                minimumFractionDigits: 0
+            }).format(num);
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('es-CO');
+        }
+
+        function formatearFecha(fechaString) {
+            const fecha = new Date(fechaString);
+            const opciones = { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit' 
+            };
+            return fecha.toLocaleDateString('es-CO', opciones);
+        }
+
+        // API CALLS
+        async function apiCall(endpoint, method = 'GET', data = null) {
+            const options = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${currentToken}`
+                },
+                // Evitar caches intermedias y problemas con SW
+                cache: 'no-store',
+                mode: 'cors'
+            };
+
+            if (data !== null && data !== undefined) {
+                options.body = JSON.stringify(data);
+            }
+
+            const response = await fetch(`${API_URL}${endpoint}`, options);
+
+            if (!response.ok) {
+                let errorMessage = 'Error en la petición';
+                let shouldLogout = false;
+                
+                try {
+                    const rawError = await response.text();
+                    if (rawError) {
+                        try {
+                            const parsedError = JSON.parse(rawError);
+                            errorMessage = parsedError.mensaje || parsedError.message || rawError;
+                            
+                            // Solo hacer logout si el mensaje indica problema de autenticación
+                            if (response.status === 401 && 
+                                (errorMessage.includes('Token') || 
+                                 errorMessage.includes('expirado') || 
+                                 errorMessage.includes('inválido') ||
+                                 errorMessage.includes('proporcionado') ||
+                                 errorMessage.includes('Sesión'))) {
+                                shouldLogout = true;
+                            }
+                        } catch (_) {
+                            errorMessage = rawError;
+                        }
+                    }
+                } catch (_) {
+                    // Ignorar fallos al leer el cuerpo de error
+                }
+
+                if (shouldLogout) {
+                    logout();
+                    throw new Error('Sesión expirada');
+                }
+
+                throw new Error(errorMessage);
+            }
+
+            try {
+                return await response.json();
+            } catch (_) {
+                return null;
+            }
+        }
+
+        // AUTHENTICATION
+        document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                    mode: 'cors',
+                    credentials: 'omit'
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        throw new Error('Usuario o contraseña incorrectos');
+                    }
+                    throw new Error('Error al iniciar sesión. Intente nuevamente.');
+                }
+
+                const data = await response.json();
+                currentToken = data.token;
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('user', JSON.stringify(data.usuario));
+
+                document.getElementById('loginPage').classList.add('hidden');
+                document.getElementById('mainApp').classList.remove('hidden');
+                document.getElementById('userName').textContent = data.usuario.nombre_completo || data.usuario.username;
+
+                loadDashboard();
+            } catch (error) {
+                let errorMsg = error.message;
+                if (error.name === 'TypeError' || errorMsg.includes('fetch')) {
+                    errorMsg = '❌ No se puede conectar al servidor. Verifique que el backend esté corriendo en http://127.0.0.1:5000';
+                }
+                document.getElementById('loginAlert').innerHTML = `
+                    <div class="alert alert-danger">${errorMsg}</div>
+                `;
+            }
+        });
+
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            currentToken = null;
+            document.getElementById('mainApp').classList.add('hidden');
+            document.getElementById('loginPage').classList.remove('hidden');
+        }
+
+        // DASHBOARD
+        async function loadDashboard() {
+            try {
+                // Agregar timestamp para evitar caché
+                const data = await apiCall(`/dashboard?_t=${Date.now()}`);
+                
+                // Update stats
+                const statsHTML = `
+                    <div class="stat-card">
+                        <div class="stat-label">Lotes Activos</div>
+                        <div class="stat-value">${data.total_lotes_activos}</div>
+                        <div class="stat-description">En producción</div>
+                    </div>
+                    <div class="stat-card success">
+                        <div class="stat-label">Total Aves</div>
+                        <div class="stat-value">${data.total_aves.toLocaleString()}</div>
+                        <div class="stat-description">Cantidad actual</div>
+                    </div>
+                    <div class="stat-card warning">
+                        <div class="stat-label">Ganancia Total</div>
+                        <div class="stat-value">${formatCurrency(data.lotes.reduce((sum, l) => sum + l.ganancia, 0))}</div>
+                        <div class="stat-description">De lotes activos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">FCR Promedio</div>
+                        <div class="stat-value">${formatNumber(data.lotes.reduce((sum, l) => sum + l.fcr, 0) / (data.lotes.length || 1))}</div>
+                        <div class="stat-description">Conversión alimenticia</div>
+                    </div>
+                `;
+                document.getElementById('dashboardStats').innerHTML = statsHTML;
+
+                // Cargar alertas globales
+                await loadAlertasDashboard();
+                await loadConfiguracionCard();
+
+                // Update table
+                await loadLotesTable();
+            } catch (error) {
+                showAlert('Error cargando dashboard', 'danger');
+            }
+        }
+
+        async function loadAlertasDashboard() {
+            try {
+                const alertas = await apiCall('/alertas');
+                const cont = document.getElementById('alertasDashboard');
+                if (!alertas.length) {
+                    cont.innerHTML = '<div class="card"><div class="card-content" style="color: #10b981; font-weight:600;">✅ No hay alertas activas</div></div>';
+                    return;
+                }
+                cont.innerHTML = `
+                    <div class="card">
+                        <div class="card-header"><h2 class="card-title">Alertas</h2></div>
+                        <div class="card-content" style="display:flex; flex-direction:column; gap:0.5rem;">
+                            ${alertas.map(a => `
+                                <div class="alert ${a.prioridad==='alta' ? 'alert-danger' : 'alert-warning'}" style="display:flex; flex-direction:column; gap:0.25rem;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                                        <strong>${a.categoria} - ${a.tipo}</strong>
+                                        <span style="font-size:0.75rem; opacity:0.7;">Lote: ${a.lote}</span>
+                                    </div>
+                                    <div>${a.mensaje}</div>
+                                    ${a.valor!==undefined ? `<div style='font-size:0.75rem;'>Valor: <strong>${a.valor}</strong></div>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            } catch (e) {
+                document.getElementById('alertasDashboard').innerHTML = '<div class="alert alert-danger">Error cargando alertas</div>';
+            }
+        }
+
+        async function loadAlertasLote(loteId) {
+            try {
+                const alertas = await apiCall(`/lotes/${loteId}/alertas`);
+                const cont = document.getElementById('alertasLote');
+                if (!cont) return;
+                
+                if (!alertas || !alertas.length) {
+                    cont.innerHTML = '<div class="alert alert-info" style="color: #10b981; background: #d1fae5; border-color: #6ee7b7;">✅ No hay alertas. Todo está dentro de los rangos normales.</div>';
+                    return;
+                }
+                
+                cont.innerHTML = alertas.map(a => `
+                    <div class="alert ${a.prioridad==='alta' ? 'alert-danger' : 'alert-warning'}" style="margin-bottom: 0.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.25rem;">
+                            <strong>${a.categoria} - ${a.tipo}</strong>
+                        </div>
+                        <div>${a.mensaje}</div>
+                        ${a.valor!==undefined ? `<div style='font-size:0.75rem; margin-top: 0.25rem;'>Valor actual: <strong>${a.valor}</strong></div>` : ''}
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Error cargando alertas del lote:', e);
+            }
+        }
+
+                async function loadConfiguracionCard() {
+                        try {
+                                const cfg = await apiCall('/configuracion');
+                                const div = document.getElementById('configuracionCard');
+                                div.innerHTML = `
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h2 class="card-title">Configuración de Umbrales</h2>
+                                        <button class="btn btn-outline" onclick="openModal('editarConfigModal')">Editar</button>
+                                    </div>
+                                    <div class="card-content" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:0.75rem;">
+                                        <div class="stat-card"><div class="stat-label">Temp Min</div><div class="stat-value">${cfg.temp_min}°C</div></div>
+                                        <div class="stat-card"><div class="stat-label">Temp Max</div><div class="stat-value">${cfg.temp_max}°C</div></div>
+                                        <div class="stat-card"><div class="stat-label">Hum Min</div><div class="stat-value">${cfg.humedad_min}%</div></div>
+                                        <div class="stat-card"><div class="stat-label">Hum Max</div><div class="stat-value">${cfg.humedad_max}%</div></div>
+                                        <div class="stat-card"><div class="stat-label">Consumo Mín</div><div class="stat-value">${cfg.consumo_min_g_dia}g</div></div>
+                                        <div class="stat-card"><div class="stat-label">Mort Diaria Máx</div><div class="stat-value">${cfg.mortalidad_diaria_max_pct}%</div></div>
+                                        <div class="stat-card"><div class="stat-label">Tol Peso ±%</div><div class="stat-value">${cfg.peso_tolerancia_pct}%</div></div>
+                                    </div>
+                                </div>`;
+                                // Prellenar modal si está abierto
+                                const form = document.getElementById('editarConfigForm');
+                                if (form) {
+                                        form.temp_min.value = cfg.temp_min;
+                                        form.temp_max.value = cfg.temp_max;
+                                        form.humedad_min.value = cfg.humedad_min;
+                                        form.humedad_max.value = cfg.humedad_max;
+                                        form.consumo_min_g_dia.value = cfg.consumo_min_g_dia;
+                                        form.mortalidad_diaria_max_pct.value = cfg.mortalidad_diaria_max_pct;
+                                        if (form.peso_tolerancia_pct) form.peso_tolerancia_pct.value = cfg.peso_tolerancia_pct;
+                                }
+                        } catch (e) {
+                                document.getElementById('configuracionCard').innerHTML = '<div class="alert alert-danger">Error cargando configuración</div>';
+                        }
+                }
+
+        async function loadLotesTable() {
+            try {
+                // Agregar timestamp para evitar caché
+                const lotes = await apiCall(`/lotes?_t=${Date.now()}`);
+                
+                const tbody = document.getElementById('lotesTableBody');
+                tbody.innerHTML = lotes.map(lote => {
+                    // Usar datos calculados del backend
+                    const diasRestantes = lote.dias_restantes !== undefined ? lote.dias_restantes : '-';
+                    const fechaSacrificio = lote.fecha_sacrificio ? formatearFecha(lote.fecha_sacrificio) : '-';
+                    
+                    // Determinar color para días restantes
+                    let colorDiasRestantes = '';
+                    if (typeof diasRestantes === 'number') {
+                        if (diasRestantes <= 0) colorDiasRestantes = 'style="color: #dc2626; font-weight: bold;"'; // Rojo
+                        else if (diasRestantes <= 7) colorDiasRestantes = 'style="color: #f59e0b; font-weight: bold;"'; // Amarillo
+                        else if (diasRestantes <= 14) colorDiasRestantes = 'style="color: #3b82f6; font-weight: bold;"'; // Azul
+                        else colorDiasRestantes = 'style="color: #10b981;"'; // Verde
+                    }
+                    
+                    return `
+                    <tr>
+                        <td><strong>${lote.nombre}</strong></td>
+                        <td>${lote.galpon || '-'}</td>
+                        <td>${lote.dias_transcurridos}</td>
+                        <td ${colorDiasRestantes}>
+                            ${diasRestantes === 0 ? '¡HOY!' : (diasRestantes < 0 ? `${Math.abs(diasRestantes)} días tarde` : diasRestantes)}
+                        </td>
+                        <td style="font-size: 0.875rem;">
+                            ${fechaSacrificio}
+                            ${diasRestantes === 0 ? '<br><span style="color: #dc2626; font-weight: bold;">🔔 ¡Sacrificio HOY!</span>' : ''}
+                            ${diasRestantes > 0 && diasRestantes <= 7 ? '<br><span style="color: #f59e0b; font-weight: bold;">⚠️ Próximo</span>' : ''}
+                        </td>
+                        <td>${lote.cantidad_actual || lote.cantidad_inicial}</td>
+                        <td>-</td>
+                        <td>
+                            <span class="badge ${lote.estado === 'activo' ? 'badge-success' : 'badge-warning'}">
+                                ${lote.estado}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="button-group">
+                                <button class="btn btn-primary btn-sm" onclick="verLote(${lote.id})" title="Ver detalles">
+                                    👁️ Ver
+                                </button>
+                                <button class="btn btn-outline btn-sm" onclick="showQrLote(${lote.id})" title="QR del lote">
+                                    📱 QR
+                                </button>
+                                <button class="btn btn-warning btn-sm" onclick="editarLote(${lote.id})" title="Editar lote">
+                                    ✏️ Editar
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="eliminarLote(${lote.id}, '${lote.nombre.replace(/'/g, "\\'")}')">
+                                    🗑️ Eliminar
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    `;
+                }).join('');
+            } catch (error) {
+                showAlert('Error cargando lotes', 'danger');
+            }
+        }
+
+        // LOTES
+        document.getElementById('nuevoLoteForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            try {
+                await apiCall('/lotes', 'POST', data);
+                showAlert('Lote creado exitosamente');
+                closeModal('nuevoLoteModal');
+                e.target.reset();
+                loadDashboard();
+            } catch (error) {
+                showAlert('Error creando lote', 'danger');
+            }
+        });
+
+        async function showQrLote(loteId) {
+            try {
+                console.log('Generando QR para lote:', loteId);
+                const resp = await fetch(`${API_URL}/lotes/${loteId}/qr`, {
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`
+                    },
+                    mode: 'cors',
+                    credentials: 'omit'
+                });
+                if (!resp.ok) {
+                    const errorText = await resp.text();
+                    console.error('Error del servidor:', errorText);
+                    throw new Error('No se pudo obtener el QR: ' + resp.status);
+                }
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                const img = document.getElementById('qrLoteImg');
+                const link = document.getElementById('qrDownloadLink');
+                const title = document.getElementById('qrModalTitle');
+                if (img) img.src = url;
+                if (link) { link.href = url; link.download = `lote_${loteId}_qr.png`; }
+                if (title) title.textContent = `QR del Lote #${loteId}`;
+                openModal('qrLoteModal');
+                console.log('QR generado y modal abierto');
+            } catch (e) {
+                console.error('Error generando QR:', e);
+                showAlert('Error generando QR del lote: ' + e.message, 'danger');
+            }
+        }
+
+        async function exportarLote(formato = 'pdf') {
+            if (!currentLoteId) return;
+            try {
+                const weekVal = document.getElementById('exportWeekInput')?.value || '';
+                const semanaParam = weekVal ? `&semana=${encodeURIComponent(weekVal)}` : '';
+                const resp = await fetch(`${API_URL}/lotes/${currentLoteId}/export?formato=${encodeURIComponent(formato)}${semanaParam}`, {
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`
+                    }
+                });
+                if (!resp.ok) {
+                    let msg = 'Error generando exporte';
+                    try { const j = await resp.json(); msg = j.mensaje || msg; } catch {}
+                    throw new Error(msg);
+                }
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const hoy = new Date();
+                const yyyymmdd = hoy.toISOString().slice(0,10).replace(/-/g,'');
+                const ext = formato === 'xlsx' ? 'xlsx' : 'pdf';
+                a.href = url;
+                a.download = `lote_${currentLoteId}_semana_${yyyymmdd}.${ext}`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1500);
+            } catch (e) {
+                showAlert(e.message || 'No se pudo exportar el lote', 'danger');
+            }
+        }
+
+        function isoWeekString(date) {
+            // Devuelve 'YYYY-Www' para un Date (UTC seguro)
+            const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+            // Jueves de la semana actual
+            const day = d.getUTCDay() || 7; // 1..7
+            d.setUTCDate(d.getUTCDate() + 4 - day);
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+            const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+            const year = d.getUTCFullYear();
+            const ww = weekNo.toString().padStart(2, '0');
+            return `${year}-W${ww}`;
+        }
+
+        function setDefaultExportWeek(fechaInicioStr) {
+            try {
+                const input = document.getElementById('exportWeekInput');
+                if (!input) return;
+                const start = new Date(`${fechaInicioStr}T00:00:00`);
+                const today = new Date();
+                const msPerDay = 24 * 60 * 60 * 1000;
+                const diffDays = Math.max(0, Math.floor((today.setHours(0,0,0,0) - start.setHours(0,0,0,0)) / msPerDay));
+                const segmentStart = new Date(`${fechaInicioStr}T00:00:00`);
+                segmentStart.setDate(segmentStart.getDate() + Math.floor(diffDays / 7) * 7);
+                input.value = isoWeekString(segmentStart);
+            } catch {}
+        }
+
+        // Event listener para formulario de editar lote
+        document.getElementById('editarLoteForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = {};
+            
+            // Convertir FormData a objeto, convirtiendo strings vacíos a null
+            for (let [key, value] of formData.entries()) {
+                if (value === '' || value === null) {
+                    data[key] = null;
+                } else {
+                    data[key] = value;
+                }
+            }
+            
+            const loteId = data.id;
+            delete data.id; // Remover el ID de los datos a enviar
+            
+            console.log('Actualizando lote:', loteId, 'con datos:', data);
+            
+            try {
+                const response = await apiCall(`/lotes/${loteId}`, 'PUT', data);
+                console.log('Respuesta del servidor:', response);
+                closeModal('editarLoteModal');
+                // Recargar inmediatamente los datos
+                await loadDashboard();
+                await loadLotesTable();
+                showAlert('Lote actualizado exitosamente', 'success');
+            } catch (error) {
+                console.error('Error actualizando lote:', error);
+                showAlert('Error actualizando lote: ' + (error.mensaje || error.message || 'Error desconocido'), 'danger');
+            }
+        });
+
+        async function verLote(loteId) {
+            currentLoteId = loteId;
+            
+            try {
+                const lote = await apiCall(`/lotes/${loteId}`);
+                const stats = await apiCall(`/lotes/${loteId}/estadisticas`);
+                currentLoteGenetica = (lote.genetica || '').toString();
+                // Precargar semana actual del ciclo en selector de exportación
+                setDefaultExportWeek(lote.fecha_inicio);
+                
+                document.getElementById('loteModalTitle').textContent = lote.nombre;
+                
+                // Load stats
+                const statsHTML = `
+                    <div class="stat-card">
+                        <div class="stat-label">Días Transcurridos</div>
+                        <div class="stat-value">${stats.dias_transcurridos}</div>
+                    </div>
+                    <div class="stat-card success">
+                        <div class="stat-label">Aves Actuales</div>
+                        <div class="stat-value">${stats.cantidad_actual}</div>
+                        <div class="stat-description">Peso: ${stats.peso_actual}g</div>
+                    </div>
+                    <div class="stat-card ${stats.mortalidad_porcentaje > 5 ? 'danger' : 'warning'}">
+                        <div class="stat-label">Mortalidad</div>
+                        <div class="stat-value">${stats.mortalidad_porcentaje}%</div>
+                        <div class="stat-description">${stats.total_mortalidad} aves</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">FCR</div>
+                        <div class="stat-value">${stats.fcr}</div>
+                        <div class="stat-description">ADG: ${stats.adg}g/día</div>
+                    </div>
+                    <div class="stat-card warning">
+                        <div class="stat-label">Alimento Total</div>
+                        <div class="stat-value">${stats.total_alimento}</div>
+                        <div class="stat-description">kg consumidos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Kg Producidos</div>
+                        <div class="stat-value">${stats.kg_producidos}</div>
+                        <div class="stat-description">Costo: ${formatCurrency(stats.costo_por_kg)}/kg</div>
+                    </div>
+                    <div class="stat-card ${stats.ganancia >= 0 ? 'success' : 'danger'}">
+                        <div class="stat-label">Ganancia</div>
+                        <div class="stat-value">${formatCurrency(stats.ganancia)}</div>
+                        <div class="stat-description">Rentabilidad: ${stats.rentabilidad}%</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Costo Total</div>
+                        <div class="stat-value">${formatCurrency(stats.total_costos)}</div>
+                        <div class="stat-description">Por pollo: ${formatCurrency(stats.costo_por_pollo)}</div>
+                    </div>
+                `;
+                document.getElementById('estadisticasLote').innerHTML = statsHTML;
+                
+                // Load alerts for this specific lote
+                await loadAlertasLote(loteId);
+                
+                // Load weight chart
+                loadWeightChart(loteId);
+                
+                openModal('verLoteModal');
+                switchTab('resumen');
+            } catch (error) {
+                showAlert('Error cargando lote', 'danger');
+            }
+        }
+
+        // Función para editar lote
+        async function editarLote(loteId) {
+            try {
+                console.log('Editando lote:', loteId);
+                // Obtener datos del lote
+                const lote = await apiCall(`/lotes/${loteId}`);
+                console.log('Datos del lote obtenidos:', lote);
+                
+                // Rellenar el formulario con los datos del lote
+                document.getElementById('editLoteId').value = lote.id;
+                document.getElementById('editNombre').value = lote.nombre || '';
+                document.getElementById('editFechaInicio').value = lote.fecha_inicio || '';
+                document.getElementById('editCantidadInicial').value = lote.cantidad_inicial || '';
+                document.getElementById('editPesoInicial').value = lote.peso_inicial || '';
+                document.getElementById('editDiasCiclo').value = lote.dias_ciclo || 42;
+                document.getElementById('editGenetica').value = lote.genetica || '';
+                document.getElementById('editProveedor').value = lote.proveedor || '';
+                document.getElementById('editGalpon').value = lote.galpon || '';
+                document.getElementById('editEstado').value = lote.estado || 'activo';
+                // Actualizar semana seleccionada si se edita y se abre luego verLote
+                setDefaultExportWeek(lote.fecha_inicio);
+                
+                // Calcular fecha de sacrificio después de cargar los datos
+                setTimeout(() => calcularFechaSacrificioEdit(), 100);
+                
+                // Abrir el modal
+                openModal('editarLoteModal');
+                console.log('Modal de edición abierto');
+                
+            } catch (error) {
+                console.error('Error editando lote:', error);
+                showAlert('Error cargando datos del lote: ' + (error.message || 'Error desconocido'), 'danger');
+            }
+        }
+
+        // Función para eliminar lote
+        async function eliminarLote(loteId, nombreLote) {
+            console.log('Intentando eliminar lote:', loteId, nombreLote);
+            if (confirm(`¿Estás seguro de que deseas eliminar el lote "${nombreLote}"?\n\n⚠️ ATENCIÓN: Esta acción eliminará:\n• Todos los registros diarios\n• Todos los costos e ingresos\n• Todos los registros de sanidad\n• Toda la información asociada\n\nEsta acción NO se puede deshacer.`)) {
+                try {
+                    console.log('Eliminando lote...');
+                    await apiCall(`/lotes/${loteId}`, 'DELETE');
+                    showAlert('Lote eliminado exitosamente', 'success');
+                    console.log('Lote eliminado, recargando dashboard...');
+                    loadDashboard(); // Recargar la página principal
+                } catch (error) {
+                    console.error('Error eliminando lote:', error);
+                    showAlert('Error eliminando lote: ' + (error.mensaje || error.message || 'Error desconocido'), 'danger');
+                }
+            } else {
+                console.log('Eliminación cancelada por el usuario');
+            }
+        }
+
+        let weightChart = null;
+
+        async function loadWeightChart(loteId) {
+            try {
+                const [data, cfg] = await Promise.all([
+                    apiCall(`/lotes/${loteId}/curva-peso`),
+                    apiCall('/configuracion')
+                ]);
+                
+                const ctx = document.getElementById('chartPeso');
+                if (!ctx) return;
+
+                // Clear previous chart
+                if (weightChart) {
+                    weightChart.destroy();
+                }
+
+                // Create canvas + caption genética objetivo
+                const geneticaLower = (currentLoteGenetica || '').toLowerCase();
+                const objetivoLabel = geneticaLower.includes('ross') ? 'Ross 308' : 'Cobb 500';
+                const tolPct = (cfg.peso_tolerancia_pct ?? 5);
+                ctx.innerHTML = `
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <small style="color:#64748b;">Genética objetivo: <strong>${objetivoLabel}</strong> (banda ±${tolPct}%)</small>
+                    </div>
+                    <canvas id="weightChartCanvas"></canvas>
+                `;
+                const canvas = document.getElementById('weightChartCanvas');
+
+                const objetivo = data.map(d => d.peso_objetivo ?? null);
+                const tol = (Number(tolPct) || 0) / 100;
+                const objetivoUpper = objetivo.map(v => (v ? Math.round(v * (1 + tol)) : null));
+                const objetivoLower = objetivo.map(v => (v ? Math.round(v * (1 - tol)) : null));
+
+                weightChart = new Chart(canvas, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(d => `Día ${d.dias}`),
+                        datasets: [
+                            {
+                                label: 'Peso Promedio (g)',
+                                data: data.map(d => d.peso),
+                                borderColor: '#2563eb',
+                                backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                                tension: 0.4,
+                                fill: true,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Objetivo +5%',
+                                data: objetivoUpper,
+                                borderColor: 'rgba(22, 163, 74, 0)',
+                                backgroundColor: 'rgba(22, 163, 74, 0.10)',
+                                pointRadius: 0,
+                                tension: 0.25,
+                                fill: '-1',
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Objetivo -5%',
+                                data: objetivoLower,
+                                borderColor: 'rgba(22, 163, 74, 0)',
+                                backgroundColor: 'rgba(22, 163, 74, 0.10)',
+                                pointRadius: 0,
+                                tension: 0.25,
+                                fill: false,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Peso Objetivo (g)',
+                                data: objetivo,
+                                borderColor: '#16a34a',
+                                backgroundColor: 'rgba(22, 163, 74, 0.05)',
+                                borderDash: [6, 6],
+                                pointRadius: 0,
+                                tension: 0.3,
+                                fill: false,
+                                yAxisID: 'y'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            },
+                            title: {
+                                display: true,
+                                text: 'Curva de Crecimiento'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    afterBody: function(items) {
+                                        const idx = items[0].dataIndex;
+                                        const d = data[idx];
+                                        const lines = [];
+                                        if (typeof d.adg === 'number') {
+                                            lines.push(`ADG: ${d.adg} g/día`);
+                                        }
+                                        if (d.fcr) {
+                                            lines.push(`FCR: ${d.fcr}`);
+                                        }
+                                        return lines;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Peso (g)'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Días'
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading chart:', error);
+            }
+        }
+
+        // REGISTROS
+        async function loadRegistros() {
+            if (!currentLoteId) return;
+
+            try {
+                const registros = await apiCall(`/lotes/${currentLoteId}/registros`);
+                
+                const tbody = document.getElementById('registrosTableBody');
+                tbody.innerHTML = registros.map(r => `
+                    <tr>
+                        <td>${formatDate(r.fecha)}</td>
+                        <td>${r.alimento_kg || '-'}</td>
+                        <td>${r.agua_litros || '-'}</td>
+                        <td>${r.mortalidad || 0}</td>
+                        <td>${r.peso_promedio || '-'}</td>
+                        <td>${r.temperatura_promedio || '-'}</td>
+                        <td>${r.humedad || '-'}</td>
+                        <td>${r.observaciones || '-'}</td>
+                        <td>
+                            <div class="button-group">
+                                <button class="btn btn-primary btn-sm" onclick="duplicarRegistro(${r.id})" title="Duplicar registro">
+                                    📋 Duplicar
+                                </button>
+                                <button class="btn btn-warning btn-sm" onclick="editarRegistro(${r.id})" title="Editar registro">
+                                    ✏️ Editar
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="eliminarRegistro(${r.id}, '${r.fecha}')" title="Eliminar registro">
+                                    🗑️ Eliminar
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                showAlert('Error cargando registros', 'danger');
+            }
+        }
+
+        document.getElementById('nuevoRegistroForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            try {
+                await apiCall(`/lotes/${currentLoteId}/registros`, 'POST', data);
+                showAlert('Registro guardado exitosamente');
+                closeModal('nuevoRegistroModal');
+                e.target.reset();
+                loadRegistros();
+                verLote(currentLoteId); // Reload stats
+            } catch (error) {
+                showAlert('Error guardando registro', 'danger');
+            }
+        });
+
+        // COSTOS
+        async function loadCostos() {
+            if (!currentLoteId) return;
+
+            try {
+                const costos = await apiCall(`/lotes/${currentLoteId}/costos`);
+                
+                const tbody = document.getElementById('costosTableBody');
+                tbody.innerHTML = costos.map(c => `
+                    <tr>
+                        <td>${formatDate(c.fecha)}</td>
+                        <td><span class="badge badge-warning">${c.categoria}</span></td>
+                        <td>${c.concepto}</td>
+                        <td><strong>${formatCurrency(c.monto)}</strong></td>
+                        <td>
+                            <div class="button-group">
+                                <button class="btn btn-warning btn-sm" onclick="editarCosto(${c.id})" title="Editar costo">
+                                    ✏️ Editar
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="eliminarCosto(${c.id}, '${c.concepto}')" title="Eliminar costo">
+                                    🗑️ Eliminar
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                showAlert('Error cargando costos', 'danger');
+            }
+        }
+
+        document.getElementById('nuevoCostoForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            try {
+                await apiCall(`/lotes/${currentLoteId}/costos`, 'POST', data);
+                showAlert('Costo registrado exitosamente');
+                closeModal('nuevoCostoModal');
+                e.target.reset();
+                loadCostos();
+                verLote(currentLoteId);
+            } catch (error) {
+                showAlert('Error registrando costo', 'danger');
+            }
+        });
+
+        // INGRESOS
+        async function loadIngresos() {
+            if (!currentLoteId) return;
+
+            try {
+                const ingresos = await apiCall(`/lotes/${currentLoteId}/ingresos`);
+                
+                const tbody = document.getElementById('ingresosTableBody');
+                tbody.innerHTML = ingresos.map(i => `
+                    <tr>
+                        <td>${formatDate(i.fecha)}</td>
+                        <td>${i.cantidad_vendida}</td>
+                        <td>${i.peso_promedio}</td>
+                        <td>${formatCurrency(i.precio_por_kg)}</td>
+                        <td><strong>${formatCurrency(i.total)}</strong></td>
+                        <td>${i.cliente || '-'}</td>
+                        <td>
+                            <div class="button-group">
+                                <button class="btn btn-warning btn-sm" onclick="editarIngreso(${i.id})" title="Editar ingreso">
+                                    ✏️ Editar
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="eliminarIngreso(${i.id})" title="Eliminar ingreso">
+                                    🗑️ Eliminar
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                showAlert('Error cargando ingresos', 'danger');
+            }
+        }
+
+        document.getElementById('nuevoIngresoForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            try {
+                await apiCall(`/lotes/${currentLoteId}/ingresos`, 'POST', data);
+                showAlert('Ingreso registrado exitosamente');
+                closeModal('nuevoIngresoModal');
+                e.target.reset();
+                loadIngresos();
+                verLote(currentLoteId);
+            } catch (error) {
+                showAlert('Error registrando ingreso', 'danger');
+            }
+        });
+
+        async function editarIngreso(ingresoId) {
+            try {
+                const ingreso = await apiCall(`/lotes/${currentLoteId}/ingresos/${ingresoId}`);
+                
+                document.getElementById('editIngresoId').value = ingreso.id;
+                document.getElementById('editIngresoFecha').value = ingreso.fecha;
+                document.getElementById('editIngresoCantidad').value = ingreso.cantidad_vendida;
+                document.getElementById('editIngresoPeso').value = ingreso.peso_promedio;
+                document.getElementById('editIngresoPrecio').value = ingreso.precio_por_kg;
+                document.getElementById('editIngresoCliente').value = ingreso.cliente || '';
+                document.getElementById('editIngresoObservaciones').value = ingreso.observaciones || '';
+                
+                openModal('editarIngresoModal');
+            } catch (error) {
+                showAlert('Error cargando datos del ingreso', 'danger');
+            }
+        }
+
+        document.getElementById('editarIngresoForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            const ingresoId = document.getElementById('editIngresoId').value;
+            
+            try {
+                await apiCall(`/lotes/${currentLoteId}/ingresos/${ingresoId}`, 'PUT', data);
+                showAlert('Ingreso actualizado exitosamente', 'success');
+                closeModal('editarIngresoModal');
+                loadIngresos();
+                verLote(currentLoteId);
+            } catch (error) {
+                showAlert('Error actualizando ingreso', 'danger');
+            }
+        });
+
+        async function eliminarIngreso(ingresoId) {
+            if (confirm('¿Estás seguro de que deseas eliminar este ingreso?')) {
+                try {
+                    await apiCall(`/lotes/${currentLoteId}/ingresos/${ingresoId}`, 'DELETE');
+                    showAlert('Ingreso eliminado exitosamente', 'success');
+                    loadIngresos();
+                    verLote(currentLoteId);
+                } catch (error) {
+                    showAlert('Error eliminando ingreso', 'danger');
+                }
+            }
+        }
+
+        // SANIDAD
+        async function loadSanidad() {
+            if (!currentLoteId) return;
+
+            try {
+                const sanidad = await apiCall(`/lotes/${currentLoteId}/sanidad`);
+                
+                const tbody = document.getElementById('sanidadTableBody');
+                tbody.innerHTML = sanidad.map(s => `
+                    <tr>
+                        <td>${formatDate(s.fecha)}</td>
+                        <td><span class="badge badge-success">${s.tipo}</span></td>
+                        <td>${s.producto}</td>
+                        <td>${s.dosis || '-'}</td>
+                        <td>${s.edad_dias || '-'}</td>
+                        <td>${s.enfermedad_nombre || '-'}</td>
+                        <td>${s.via_administracion || '-'}</td>
+                        <td>${s.retiro_dias != null ? s.retiro_dias : '-'}</td>
+                        <td>
+                            <div class="button-group">
+                                <button class="btn btn-warning btn-sm" onclick="editarSanidad(${s.id})" title="Editar registro sanitario">
+                                    ✏️ Editar
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="eliminarSanidad(${s.id}, '${s.producto}')" title="Eliminar registro sanitario">
+                                    🗑️ Eliminar
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                showAlert('Error cargando registros sanitarios', 'danger');
+            }
+        }
+
+        // ENFERMEDADES
+        async function loadEnfermedades() {
+            try {
+                const enfermedades = await apiCall('/enfermedades');
+                const tbody = document.getElementById('enfermedadesTableBody');
+                tbody.innerHTML = enfermedades.map(e => `
+                    <tr>
+                        <td><strong>${e.nombre}</strong></td>
+                        <td style="max-width:280px; white-space:pre-wrap;">${e.sintomas || '-'}</td>
+                        <td style="max-width:220px; white-space:pre-wrap;">${e.prevencion || '-'}</td>
+                        <td style="max-width:220px; white-space:pre-wrap;">${e.tratamiento || '-'}</td>
+                        <td style="max-width:220px; white-space:pre-wrap;">${e.medicamentos || '-'}</td>
+                        <td>
+                            <div class="button-group">
+                                <button class="btn btn-warning btn-sm" onclick="editarEnfermedad(${e.id})">✏️ Editar</button>
+                                <button class="btn btn-danger btn-sm" onclick="eliminarEnfermedad(${e.id}, '${e.nombre.replace(/'/g, "\'")}')">🗑️ Eliminar</button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                showAlert('Error cargando enfermedades', 'danger');
+            }
+        }
+
+        document.getElementById('nuevaEnfermedadForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            try {
+                await apiCall('/enfermedades', 'POST', data);
+                showAlert('Enfermedad registrada', 'success');
+                closeModal('nuevoEnfermedadModal');
+                e.target.reset();
+                loadEnfermedades();
+            } catch (error) {
+                showAlert('Error registrando enfermedad', 'danger');
+            }
+        });
+
+        async function editarEnfermedad(id) {
+            try {
+                const e = await apiCall(`/enfermedades/${id}`);
+                document.getElementById('editarEnfermedadId').value = e.id;
+                document.getElementById('editarEnfermedadNombre').value = e.nombre || '';
+                document.getElementById('editarEnfermedadSintomas').value = e.sintomas || '';
+                document.getElementById('editarEnfermedadPrevencion').value = e.prevencion || '';
+                document.getElementById('editarEnfermedadTratamiento').value = e.tratamiento || '';
+                document.getElementById('editarEnfermedadMedicamentos').value = e.medicamentos || '';
+                openModal('editarEnfermedadModal');
+            } catch (error) {
+                showAlert('Error cargando enfermedad', 'danger');
+            }
+        }
+
+        document.getElementById('editarEnfermedadForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('editarEnfermedadId').value;
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            try {
+                await apiCall(`/enfermedades/${id}`, 'PUT', data);
+                showAlert('Enfermedad actualizada', 'success');
+                closeModal('editarEnfermedadModal');
+                loadEnfermedades();
+            } catch (error) {
+                showAlert('Error actualizando enfermedad', 'danger');
+            }
+        });
+
+        async function eliminarEnfermedad(id, nombre) {
+            if (!confirm(`¿Eliminar enfermedad "${nombre}"?`)) return;
+            try {
+                await apiCall(`/enfermedades/${id}`, 'DELETE');
+                showAlert('Enfermedad eliminada', 'success');
+                loadEnfermedades();
+            } catch (error) {
+                showAlert('Error eliminando enfermedad', 'danger');
+            }
+        }
+
+        document.getElementById('nuevoSanidadForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            // Normalizar campos opcionales
+            if (data.retiro_dias === '') delete data.retiro_dias; else data.retiro_dias = Number(data.retiro_dias);
+            if (data.enfermedad_id === '') delete data.enfermedad_id; else data.enfermedad_id = Number(data.enfermedad_id);
+            
+            try {
+                await apiCall(`/lotes/${currentLoteId}/sanidad`, 'POST', data);
+                showAlert('Registro sanitario guardado exitosamente');
+                closeModal('nuevoSanidadModal');
+                e.target.reset();
+                loadSanidad();
+            } catch (error) {
+                showAlert('Error guardando registro sanitario', 'danger');
+            }
+        });
+
+        // FUNCIONES DE EDICIÓN Y ELIMINACIÓN DE REGISTROS
+
+        // === REGISTROS DIARIOS ===
+        async function editarRegistro(registroId) {
+            try {
+                const registro = await apiCall(`/lotes/${currentLoteId}/registros/${registroId}`);
+                
+                // Rellenar el formulario con los datos del registro
+                document.getElementById('editRegistroId').value = registro.id;
+                document.getElementById('editRegistroFecha').value = registro.fecha;
+                document.getElementById('editRegistroAlimento').value = registro.alimento_kg || '';
+                document.getElementById('editRegistroAgua').value = registro.agua_litros || '';
+                document.getElementById('editRegistroMortalidad').value = registro.mortalidad || '';
+                document.getElementById('editRegistroPeso').value = registro.peso_promedio || '';
+                document.getElementById('editRegistroTemperatura').value = registro.temperatura_promedio || '';
+                document.getElementById('editRegistroHumedad').value = registro.humedad || '';
+                document.getElementById('editRegistroObservaciones').value = registro.observaciones || '';
+                
+                openModal('editarRegistroModal');
+            } catch (error) {
+                showAlert('Error cargando datos del registro', 'danger');
+            }
+        }
+
+        async function eliminarRegistro(registroId, fecha) {
+            if (confirm(`¿Estás seguro de que deseas eliminar el registro del ${formatDate(fecha)}?`)) {
+                try {
+                    await apiCall(`/lotes/${currentLoteId}/registros/${registroId}`, 'DELETE');
+                    showAlert('Registro eliminado exitosamente', 'success');
+                    loadRegistros();
+                    verLote(currentLoteId); // Recargar estadísticas
+                } catch (error) {
+                    showAlert('Error eliminando registro', 'danger');
+                }
+            }
+        }
+
+        async function duplicarRegistro(registroId) {
+            try {
+                const registro = await apiCall(`/lotes/${currentLoteId}/registros/${registroId}`);
+                
+                // Rellenar el formulario de nuevo registro con los datos del registro original
+                document.querySelector('input[name="fecha"]').value = new Date().toISOString().split('T')[0]; // Fecha actual
+                document.querySelector('input[name="alimento_kg"]').value = registro.alimento_kg || '';
+                document.querySelector('input[name="agua_litros"]').value = registro.agua_litros || '';
+                document.querySelector('input[name="mortalidad"]').value = '0'; // Resetear mortalidad
+                document.querySelector('input[name="peso_promedio"]').value = registro.peso_promedio || '';
+                document.querySelector('input[name="temperatura_promedio"]').value = registro.temperatura_promedio || '';
+                document.querySelector('input[name="humedad"]').value = registro.humedad || '';
+                document.querySelector('textarea[name="observaciones"]').value = `Duplicado de registro del ${formatDate(registro.fecha)}`;
+                
+                openModal('nuevoRegistroModal');
+                showAlert('Datos copiados. Modifica la fecha y guarda el nuevo registro.', 'success');
+            } catch (error) {
+                showAlert('Error duplicando registro', 'danger');
+            }
+        }
+
+        // === COSTOS ===
+        async function editarCosto(costoId) {
+            try {
+                const costo = await apiCall(`/lotes/${currentLoteId}/costos/${costoId}`);
+                
+                // Rellenar el formulario con los datos del costo
+                document.getElementById('editCostoId').value = costo.id;
+                document.getElementById('editCostoFecha').value = costo.fecha;
+                document.getElementById('editCostoCategoria').value = costo.categoria || '';
+                document.getElementById('editCostoConcepto').value = costo.concepto || '';
+                document.getElementById('editCostoMonto').value = costo.monto || '';
+                document.getElementById('editCostoObservaciones').value = costo.observaciones || '';
+                
+                openModal('editarCostoModal');
+            } catch (error) {
+                showAlert('Error cargando datos del costo', 'danger');
+            }
+        }
+
+        async function eliminarCosto(costoId, concepto) {
+            if (confirm(`¿Estás seguro de que deseas eliminar el costo "${concepto}"?`)) {
+                try {
+                    await apiCall(`/lotes/${currentLoteId}/costos/${costoId}`, 'DELETE');
+                    showAlert('Costo eliminado exitosamente', 'success');
+                    loadCostos();
+                    verLote(currentLoteId); // Recargar estadísticas
+                } catch (error) {
+                    showAlert('Error eliminando costo', 'danger');
+                }
+            }
+        }
+
+        // === SANIDAD ===
+        async function editarSanidad(sanidadId) {
+            try {
+                const sanidad = await apiCall(`/lotes/${currentLoteId}/sanidad/${sanidadId}`);
+                
+                // Rellenar el formulario con los datos del registro sanitario
+                document.getElementById('editSanidadId').value = sanidad.id;
+                document.getElementById('editSanidadFecha').value = sanidad.fecha;
+                document.getElementById('editSanidadTipo').value = sanidad.tipo || '';
+                document.getElementById('editSanidadProducto').value = sanidad.producto || '';
+                document.getElementById('editSanidadDosis').value = sanidad.dosis || '';
+                document.getElementById('editSanidadEdad').value = sanidad.edad_dias || '';
+                await populateEnfermedadesSelects();
+                document.getElementById('editSanidadEnfermedad').value = sanidad.enfermedad_id || '';
+                document.getElementById('editSanidadVia').value = sanidad.via_administracion || '';
+                document.getElementById('editSanidadRetiro').value = sanidad.retiro_dias ?? '';
+                document.getElementById('editSanidadObservaciones').value = sanidad.observaciones || '';
+                
+                openModal('editarSanidadModal');
+            } catch (error) {
+                showAlert('Error cargando datos del registro sanitario', 'danger');
+            }
+        }
+
+        async function eliminarSanidad(sanidadId, producto) {
+            if (confirm(`¿Estás seguro de que deseas eliminar el registro sanitario "${producto}"?`)) {
+                try {
+                    await apiCall(`/lotes/${currentLoteId}/sanidad/${sanidadId}`, 'DELETE');
+                    showAlert('Registro sanitario eliminado exitosamente', 'success');
+                    loadSanidad();
+                } catch (error) {
+                    showAlert('Error eliminando registro sanitario', 'danger');
+                }
+            }
+        }
+
+        // Event listeners para formularios de edición
+        document.getElementById('editarRegistroForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            const registroId = document.getElementById('editRegistroId').value;
+            
+            try {
+                await apiCall(`/lotes/${currentLoteId}/registros/${registroId}`, 'PUT', data);
+                showAlert('Registro actualizado exitosamente', 'success');
+                closeModal('editarRegistroModal');
+                await loadRegistros();
+                await verLote(currentLoteId);
+            } catch (error) {
+                showAlert('Error actualizando registro', 'danger');
+            }
+        });
+
+        document.getElementById('editarCostoForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            const costoId = document.getElementById('editCostoId').value;
+            
+            try {
+                await apiCall(`/lotes/${currentLoteId}/costos/${costoId}`, 'PUT', data);
+                showAlert('Costo actualizado exitosamente', 'success');
+                closeModal('editarCostoModal');
+                loadCostos();
+                verLote(currentLoteId);
+            } catch (error) {
+                showAlert('Error actualizando costo', 'danger');
+            }
+        });
+
+        document.getElementById('editarSanidadForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            const sanidadId = document.getElementById('editSanidadId').value;
+            if (data.retiro_dias === '') delete data.retiro_dias; else data.retiro_dias = Number(data.retiro_dias);
+            if (data.enfermedad_id === '') delete data.enfermedad_id; else data.enfermedad_id = Number(data.enfermedad_id);
+            
+            try {
+                await apiCall(`/lotes/${currentLoteId}/sanidad/${sanidadId}`, 'PUT', data);
+                showAlert('Registro sanitario actualizado exitosamente', 'success');
+                closeModal('editarSanidadModal');
+                loadSanidad();
+            } catch (error) {
+                showAlert('Error actualizando registro sanitario', 'danger');
+            }
+        });
+
+        // Configuración
+        document.getElementById('editarConfigForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            // Convertir a número seguro
+            Object.keys(data).forEach(k => { if (data[k] !== '') data[k] = parseFloat(data[k]); });
+            try {
+                await apiCall('/configuracion', 'PUT', data);
+                showAlert('Configuración actualizada', 'success');
+                closeModal('editarConfigModal');
+                loadConfiguracionCard();
+                loadAlertasDashboard(); // Recalcular alertas con nuevos umbrales
+                if (currentLoteId) {
+                    // Si hay un lote abierto, refrescar gráfico para actualizar bandas de tolerancia
+                    loadWeightChart(currentLoteId);
+                }
+            } catch (error) {
+                showAlert('Error actualizando configuración', 'danger');
+            }
+        });
+
+        // MODAL FUNCTIONS
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+            if (modalId === 'nuevoEnfermedadModal' || modalId === 'editarEnfermedadModal') {
+                // Cargar lista actualizada al trabajar con enfermedades (refresca la tabla al volver)
+                setTimeout(loadEnfermedades, 50);
+            }
+            if (modalId === 'nuevoSanidadModal' || modalId === 'editarSanidadModal') {
+                populateEnfermedadesSelects();
+            }
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        // TAB FUNCTIONS
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Show selected tab
+            const tabContent = document.getElementById(`${tabName}Tab`);
+            if (tabContent) {
+                tabContent.classList.add('active');
+
+                // Load data for the tab
+                if (tabName === 'registros') loadRegistros();
+                if (tabName === 'economia') { loadCostos(); loadIngresos(); }
+                if (tabName === 'sanidad') { loadSanidad(); loadEnfermedades(); }
+            }
+        }
+
+        // CALCULADORAS DE FECHA DE SACRIFICIO
+        function calcularFechaSacrificio() {
+            const fechaInicio = document.querySelector('input[name="fecha_inicio"]').value;
+            const diasCiclo = parseInt(document.querySelector('input[name="dias_ciclo"]').value);
+            
+            if (fechaInicio && diasCiclo && diasCiclo > 0) {
+                const inicio = new Date(fechaInicio);
+                inicio.setDate(inicio.getDate() + diasCiclo);
+                const fechaSacrificio = inicio.toLocaleDateString('es-CO', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+                document.getElementById('fechaSacrificioPreview').value = fechaSacrificio;
+            } else {
+                document.getElementById('fechaSacrificioPreview').value = '';
+            }
+        }
+
+        function calcularFechaSacrificioEdit() {
+            const fechaInicio = document.getElementById('editFechaInicio').value;
+            const diasCiclo = parseInt(document.getElementById('editDiasCiclo').value);
+            
+            if (fechaInicio && diasCiclo && diasCiclo > 0) {
+                const inicio = new Date(fechaInicio);
+                inicio.setDate(inicio.getDate() + diasCiclo);
+                const fechaSacrificio = inicio.toLocaleDateString('es-CO', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+                document.getElementById('editFechaSacrificioPreview').value = fechaSacrificio;
+            } else {
+                document.getElementById('editFechaSacrificioPreview').value = '';
+            }
+        }
+
+        // INITIALIZATION
+        window.addEventListener('DOMContentLoaded', () => {
+            // Tema: aplicar preferencia guardada o del sistema
+            const savedTheme = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            applyTheme(savedTheme || (prefersDark ? 'dark' : 'light'));
+
+            // Set today's date as default in date inputs
+            const today = new Date().toISOString().split('T')[0];
+            document.querySelectorAll('input[type="date"]').forEach(input => {
+                if (!input.value) input.value = today;
+            });
+
+            async function tryAutoLogin() {
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+                try {
+                    await loadDashboard();
+                    document.getElementById('loginPage').classList.add('hidden');
+                    document.getElementById('mainApp').classList.remove('hidden');
+                    document.getElementById('userName').textContent = user.nombre_completo || user.username || '';
+                } catch (error) {
+                    console.warn('Error al cargar dashboard en auto-login:', error);
+                    // Solo limpiar token y mostrar login si realmente es error de autenticación
+                    if (error.message && (error.message.includes('Sesión') || error.message.includes('Token'))) {
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('user');
+                        currentToken = null;
+                        document.getElementById('mainApp').classList.add('hidden');
+                        document.getElementById('loginPage').classList.remove('hidden');
+                    }
+                }
+            }
+
+            // Check if user is logged in - solo en carga inicial
+            if (currentToken && document.getElementById('loginPage') && !document.getElementById('loginPage').classList.contains('hidden')) {
+                tryAutoLogin();
+            }
+
+            // Close modal on outside click
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        modal.classList.remove('active');
+                    }
+                });
+            });
+
+            // Event listeners para modales de crear y editar
+            setTimeout(() => {
+                const fechaInicioCreate = document.querySelector('input[name="fecha_inicio"]');
+                const diasCicloCreate = document.querySelector('input[name="dias_ciclo"]');
+                const fechaInicioEdit = document.getElementById('editFechaInicio');
+                const diasCicloEdit = document.getElementById('editDiasCiclo');
+                const enfermedadSelectNuevo = document.getElementById('sanidadEnfermedadSelect');
+                const enfermedadSelectEdit = document.getElementById('editSanidadEnfermedad');
+
+                if (fechaInicioCreate) {
+                    fechaInicioCreate.addEventListener('change', calcularFechaSacrificio);
+                }
+                if (diasCicloCreate) {
+                    diasCicloCreate.addEventListener('input', calcularFechaSacrificio);
+                }
+                if (fechaInicioEdit) {
+                    fechaInicioEdit.addEventListener('change', calcularFechaSacrificioEdit);
+                }
+                if (diasCicloEdit) {
+                    diasCicloEdit.addEventListener('input', calcularFechaSacrificioEdit);
+                }
+                if (enfermedadSelectNuevo) {
+                    enfermedadSelectNuevo.addEventListener('change', async (e) => {
+                        const id = e.target.value;
+                        if (!id) return;
+                        await prefillSanidadFromEnfermedad(id, 'nuevo');
+                    });
+                }
+                if (enfermedadSelectEdit) {
+                    enfermedadSelectEdit.addEventListener('change', async (e) => {
+                        const id = e.target.value;
+                        if (!id) return;
+                        await prefillSanidadFromEnfermedad(id, 'editar');
+                    });
+                }
+                
+                // Calcular fecha inicial al cargar
+                calcularFechaSacrificio();
+            }, 100);
+        });
+
+        async function populateEnfermedadesSelects() {
+            try {
+                const enfermedades = await apiCall('/enfermedades');
+                const options = ['<option value="">Seleccionar...</option>'].concat(
+                    enfermedades.map(e => `<option value="${e.id}">${e.nombre}</option>`) 
+                ).join('');
+                const nuevoSelect = document.getElementById('sanidadEnfermedadSelect');
+                const editSelect = document.getElementById('editSanidadEnfermedad');
+                if (nuevoSelect) nuevoSelect.innerHTML = options;
+                if (editSelect) editSelect.innerHTML = options;
+            } catch (error) {
+                console.warn('No se pudieron cargar enfermedades para selects');
+            }
+        }
+
+        async function prefillSanidadFromEnfermedad(enfermedadId, contexto) {
+            try {
+                const enf = await apiCall(`/enfermedades/${enfermedadId}`);
+                const meds = (enf.medicamentos || '').split(',').map(s => s.trim()).filter(Boolean);
+                const medSugerido = meds.length ? meds[0] : '';
+                const textoSug = [
+                    enf.nombre ? `Enfermedad: ${enf.nombre}` : null,
+                    enf.tratamiento ? `Tratamiento sugerido: ${enf.tratamiento}` : null,
+                    enf.medicamentos ? `Medicamentos: ${enf.medicamentos}` : null
+                ].filter(Boolean).join('\n');
+
+                if (contexto === 'nuevo') {
+                    const modal = document.getElementById('nuevoSanidadModal');
+                    const producto = modal?.querySelector('input[name="producto"]');
+                    const obs = modal?.querySelector('textarea[name="observaciones"]');
+                    if (producto && (!producto.value || !producto.value.trim()) && medSugerido) producto.value = medSugerido;
+                    if (obs && (!obs.value || !obs.value.trim()) && textoSug) obs.value = textoSug;
+                } else if (contexto === 'editar') {
+                    const producto = document.getElementById('editSanidadProducto');
+                    const obs = document.getElementById('editSanidadObservaciones');
+                    if (producto && (!producto.value || !producto.value.trim()) && medSugerido) producto.value = medSugerido;
+                    if (obs && (!obs.value || !obs.value.trim()) && textoSug) obs.value = textoSug;
+                }
+            } catch (e) {
+                console.warn('No se pudo autocompletar desde enfermedad');
+            }
+        }
+    </script>
+</body>
+</html>
