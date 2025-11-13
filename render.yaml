@@ -3,7 +3,8 @@ services:
     name: pollo-control
     env: python
     plan: free
-    buildCommand: pip install -r backend/requirements.txt
+    runtime: python-3.11.10
+    buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt
     startCommand: gunicorn backend.app:app --workers 2 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT
     envVars:
       - key: FLASK_ENV
