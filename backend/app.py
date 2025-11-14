@@ -57,96 +57,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-
-def ensure_database_schema():
-    """Garantiza que existan columnas añadidas por migraciones simples."""
-    try:
-        with app.app_context():
-            engine = db.engine
-            inspector = inspect(engine)
-            tables = set(inspector.get_table_names())
-
-            if 'sanidad' in tables:
-                sanidad_cols = {col['name'] for col in inspector.get_columns('sanidad')}
-                missing_statements = []
-
-                if 'via_administracion' not in sanidad_cols:
-                    missing_statements.append(('via_administracion', "ALTER TABLE sanidad ADD COLUMN via_administracion TEXT"))
-                if 'retiro_dias' not in sanidad_cols:
-                    missing_statements.append(('retiro_dias', "ALTER TABLE sanidad ADD COLUMN retiro_dias INTEGER"))
-                if 'enfermedad_id' not in sanidad_cols:
-                    missing_statements.append(('enfermedad_id', "ALTER TABLE sanidad ADD COLUMN enfermedad_id INTEGER"))
-
-                if missing_statements:
-                    with engine.begin() as conn:
-                        for _, stmt in missing_statements:
-                            conn.execute(text(stmt))
-                    added = ', '.join(name for name, _ in missing_statements)
-                    print(f'✅ Columnas faltantes agregadas a sanidad: {added}')
-    except Exception as exc:
-        # Registrar el problema pero no bloquear el arranque del backend
-        print(f"⚠️  No se pudieron aplicar migraciones automáticas: {exc}")
-
-
-def ensure_app_dirs():
-    try:
-        # Directorio de datos (persistente si se usa DATA_DIR montado en Render)
-        data_dir = os.environ.get('DATA_DIR', os.path.join(BASE_DIR, 'instance'))
-        paths = [
-            os.path.join(data_dir, 'uploads'),
-            os.path.join(data_dir, 'exports'),
-            os.path.join(data_dir, 'backups'),
-        ]
-        for p in paths:
-            os.makedirs(p, exist_ok=True)
-        # Apuntar config a estas rutas
-        app.config.setdefault('UPLOAD_FOLDER', paths[0])
-        app.config.setdefault('EXPORT_FOLDER', paths[1])
-        app.config.setdefault('BACKUP_FOLDER', paths[2])
-    except Exception as exc:
-        print(f"⚠️  No se pudieron crear directorios de trabajo: {exc}")
-
-def bootstrap_database():
-    try:
-        with app.app_context():
-            db.create_all()
-            if not Usuario.query.filter_by(username='admin').first():
-                admin = Usuario(
-                    username='admin',
-                    password_hash=generate_password_hash('admin123'),
-                    nombre_completo='Administrador',
-                    email='admin@granja.com',
-                    rol='admin'
-                )
-                db.session.add(admin)
-                db.session.commit()
-                print("✅ Usuario administrador creado: admin / admin123")
-    except Exception as exc:
-        print(f"⚠️  Bootstrap de base de datos falló: {exc}")
-
-ensure_database_schema()
-ensure_app_dirs()
-bootstrap_database()
-
-@app.route('/api/ping', methods=['GET'])
-def ping():
-    """Ruta simple para probar disponibilidad y CORS sin autenticación."""
-    return jsonify({'pong': True, 'timestamp': datetime.utcnow().isoformat()})
-
-# (La ruta /api/dashboard ya existe más abajo en el archivo. Se evita duplicarla.)
-
-@app.route('/api/<path:any_path>', methods=['OPTIONS'])
-def generic_options(any_path):
-    """Maneja preflight OPTIONS devolviendo las cabeceras necesarias."""
-    resp = jsonify({'ok': True})
-    return resp, 200
-
-# Favicon vacío para evitar 404
-@app.route('/favicon.ico')
-def favicon():
-    # Evita el 404 del navegador cuando solicita favicon desde el servidor estático
-    return ('', 204)
-
 # ============= MODELOS =============
 
 class Usuario(db.Model):
@@ -260,6 +170,95 @@ class Enfermedad(db.Model):
     tratamiento = db.Column(db.Text)
     medicamentos = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+# ============= FUNCIONES DE INICIALIZACIÓN =============
+
+def ensure_database_schema():
+    """Garantiza que existan columnas añadidas por migraciones simples."""
+    try:
+        with app.app_context():
+            engine = db.engine
+            inspector = inspect(engine)
+            tables = set(inspector.get_table_names())
+
+            if 'sanidad' in tables:
+                sanidad_cols = {col['name'] for col in inspector.get_columns('sanidad')}
+                missing_statements = []
+
+                if 'via_administracion' not in sanidad_cols:
+                    missing_statements.append(('via_administracion', "ALTER TABLE sanidad ADD COLUMN via_administracion TEXT"))
+                if 'retiro_dias' not in sanidad_cols:
+                    missing_statements.append(('retiro_dias', "ALTER TABLE sanidad ADD COLUMN retiro_dias INTEGER"))
+                if 'enfermedad_id' not in sanidad_cols:
+                    missing_statements.append(('enfermedad_id', "ALTER TABLE sanidad ADD COLUMN enfermedad_id INTEGER"))
+
+                if missing_statements:
+                    with engine.begin() as conn:
+                        for _, stmt in missing_statements:
+                            conn.execute(text(stmt))
+                    added = ', '.join(name for name, _ in missing_statements)
+                    print(f'✅ Columnas faltantes agregadas a sanidad: {added}')
+    except Exception as exc:
+        # Registrar el problema pero no bloquear el arranque del backend
+        print(f"⚠️  No se pudieron aplicar migraciones automáticas: {exc}")
+
+
+def ensure_app_dirs():
+    try:
+        # Directorio de datos (persistente si se usa DATA_DIR montado en Render)
+        data_dir = os.environ.get('DATA_DIR', os.path.join(BASE_DIR, 'instance'))
+        paths = [
+            os.path.join(data_dir, 'uploads'),
+            os.path.join(data_dir, 'exports'),
+            os.path.join(data_dir, 'backups'),
+        ]
+        for p in paths:
+            os.makedirs(p, exist_ok=True)
+        # Apuntar config a estas rutas
+        app.config.setdefault('UPLOAD_FOLDER', paths[0])
+        app.config.setdefault('EXPORT_FOLDER', paths[1])
+        app.config.setdefault('BACKUP_FOLDER', paths[2])
+    except Exception as exc:
+        print(f"⚠️  No se pudieron crear directorios de trabajo: {exc}")
+
+def bootstrap_database():
+    try:
+        with app.app_context():
+            db.create_all()
+            if not Usuario.query.filter_by(username='admin').first():
+                admin = Usuario(
+                    username='admin',
+                    password_hash=generate_password_hash('admin123'),
+                    nombre_completo='Administrador',
+                    email='admin@granja.com',
+                    rol='admin'
+                )
+                db.session.add(admin)
+                db.session.commit()
+                print("✅ Usuario administrador creado: admin / admin123")
+    except Exception as exc:
+        print(f"⚠️  Bootstrap de base de datos falló: {exc}")
+
+# Inicializar todo
+ensure_database_schema()
+ensure_app_dirs()
+bootstrap_database()
+
+@app.route('/api/ping', methods=['GET'])
+def ping():
+    """Ruta simple para probar disponibilidad y CORS sin autenticación."""
+    return jsonify({'pong': True, 'timestamp': datetime.utcnow().isoformat()})
+
+@app.route('/api/<path:any_path>', methods=['OPTIONS'])
+def generic_options(any_path):
+    """Maneja preflight OPTIONS devolviendo las cabeceras necesarias."""
+    resp = jsonify({'ok': True})
+    return resp, 200
+
+@app.route('/favicon.ico')
+def favicon():
+    # Evita el 404 del navegador cuando solicita favicon desde el servidor estático
+    return ('', 204)
 
 # ============= DECORADORES =============
 
